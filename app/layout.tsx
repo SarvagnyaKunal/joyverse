@@ -3,8 +3,8 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'joyverse',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  description: 'G435',
+  generator: 'typescript'
 }
 
 export default function RootLayout({
