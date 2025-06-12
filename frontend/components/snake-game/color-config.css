@@ -1,0 +1,68 @@
+/* 
+ * Snake Game Color Configuration
+ * This file provides VS Code color picker support for the snake game colors
+ * You can click on any hex color below to use VS Code's built-in color picker
+ * to customize the game appearance.
+ */
+
+/* Grid Background Colors */
+.grid-tile-1 {
+  background-color: #5fd41c; /* Light green for alternating tiles */
+}
+
+.grid-tile-2 {
+  background-color: #bbdf8c; /* Light yellow for alternating tiles */
+}
+
+/* Wall and Border Colors */
+.wall-border {
+  border-color: #654321; /* Brown for wall borders */
+}
+
+.wall-fill {
+  background-color: #8B4513; /* Darker brown for wall fill */
+}
+
+/* Snake Colors - Gradient from dark blue (head) to light blue (tail) */
+.snake-head {
+  background-color: #1565C0; /* Dark blue for snake head */
+}
+
+.snake-body {
+  background-color: #42A5F5; /* Medium blue for snake body */
+}
+
+.snake-tail {
+  background-color: #90CAF9; /* Light blue for snake tail */
+}
+
+.snake-eyes {
+  color: #FFFFFF; /* White for snake eyes */
+}
+
+/* Letter Colors */
+.letter-correct {
+  background-color: #2196F3; /* Blue for correct letters */
+}
+
+.letter-next {
+  background-color: #4CAF50; /* Green for next letter in sequence */
+}
+
+.letter-distractor {
+  background-color: #F44336; /* Red for distractor letters */
+}
+
+/* Game Background */
+.game-background {
+  background-color: #F5F5F5; /* Light gray game background */
+}
+
+/*
+ * To change colors:
+ * 1. Click on any hex color above
+ * 2. Use VS Code's color picker to select a new color
+ * 3. Copy the hex value
+ * 4. Update the corresponding color in constants.ts
+ * 5. The game will automatically use your new colors!
+ */
