@@ -44,4 +44,5 @@ export interface SnakeGameProps {
   canvasRef: RefObject<HTMLCanvasElement | null>
   initialWord?: string
   onWordComplete?: () => string
+  onLifeLoss?: () => void
 }

@@ -29,8 +29,7 @@ export default function SnakeGamePage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 relative z-10">
-        {/* Back Button */}
+      <div className="container mx-auto px-4 py-8 relative z-10">        {/* Back Button */}
         <div className="mb-6">
           <Button
             onClick={() => router.push("/")}
@@ -52,9 +51,7 @@ export default function SnakeGamePage() {
           <p className="text-lg md:text-xl text-gray-600 animate-fade-in-delay">
             Guide the snake to collect letters and spell words!
           </p>
-        </div>
-
-        {/* Game Container */}
+        </div>        {/* Game Container */}
         <div className="flex justify-center">
           <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-8 shadow-2xl border-4 border-purple-200">
             <SnakeGame />

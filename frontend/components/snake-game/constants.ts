@@ -28,11 +28,11 @@ export const GAME_COLORS = {
   gameBackground: "#F5F5F5", // Light gray game background
 } as const
 
-// Legacy letter colors for compatibility
+// Legacy letter colors for compatibility - all letters same color
 export const LETTER_COLORS = {
   correct: GAME_COLORS.letterCorrect,
-  next: GAME_COLORS.letterNext,
-  distractor: GAME_COLORS.letterDistractor,
+  next: GAME_COLORS.letterCorrect, // Same color as correct letters
+  distractor: GAME_COLORS.letterCorrect, // Same color as correct letters
 }
 
 // Helper functions

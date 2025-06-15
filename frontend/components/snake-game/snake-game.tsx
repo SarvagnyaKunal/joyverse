@@ -9,6 +9,7 @@ export function SnakeGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [wordList] = useState<string[]>(["apple", "train", "happy", "coding", "snake"])
   const [currentWordIndex, setCurrentWordIndex] = useState<number>(0)
+  const [showLifeLossPopup, setShowLifeLossPopup] = useState<boolean>(false)
 
   const { gameStatus, lives, score, targetWord, collectedLetters, startGame, restartGame, pauseGame, resumeGame } =
     useSnakeGame({
@@ -20,6 +21,10 @@ export function SnakeGame() {
         setCurrentWordIndex(nextIndex)
         return wordList[nextIndex]
       },
+      onLifeLoss: () => {
+        setShowLifeLossPopup(true)
+        setTimeout(() => setShowLifeLossPopup(false), 2000) // Hide popup after 2 seconds
+      },
     })
 
   // Remove auto-start effect - let user click start button instead
@@ -29,13 +34,12 @@ export function SnakeGame() {
       <div className="mb-4 text-center">
         <h2 className="text-xl font-semibold mb-2">
           Target Word: <span className="text-green-600">{targetWord}</span>
-        </h2>
-        <div className="flex justify-center gap-1 mb-2">
+        </h2>        <div className="flex justify-center gap-1 mb-2">
           {targetWord.split("").map((letter, index) => (
             <div
               key={index}
               className={`w-8 h-8 flex items-center justify-center border-2 
-                ${index < collectedLetters.length ? "border-green-500 bg-green-100" : "border-gray-300"}`}
+                ${index < collectedLetters.length ? "border-blue-500 bg-blue-100" : "border-gray-300"}`}
             >
               {letter}
             </div>
@@ -68,14 +72,23 @@ export function SnakeGame() {
               Restart Game
             </Button>
           </div>
-        )}
-
-        {gameStatus === GameStatus.PAUSED && (
+        )}        {gameStatus === GameStatus.PAUSED && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70">
             <div className="text-white text-2xl font-bold mb-4">Paused</div>
             <Button onClick={resumeGame} size="lg" className="bg-green-600 hover:bg-green-700">
               Resume Game
             </Button>
+          </div>
+        )}
+
+        {showLifeLossPopup && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/80 pointer-events-none">
+            <div className="text-white text-3xl font-bold animate-pulse">
+              💔 You Lost a Life!
+            </div>
+            <div className="text-white text-lg mt-2">
+              Lives remaining: {lives}
+            </div>
           </div>
         )}
       </div>

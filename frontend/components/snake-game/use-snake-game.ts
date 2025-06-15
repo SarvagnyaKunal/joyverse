@@ -20,7 +20,7 @@ import {
   getSafeDirection,
 } from "@/components/snake-game/constants"
 
-export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGameProps) {
+export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLoss }: SnakeGameProps) {
   const [gameState, setGameState] = useState<SnakeGameState>({
     snake: [],
     direction: Direction.RIGHT,
@@ -69,7 +69,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
         position: { x, y },
         isCorrect: true,
         isNextInSequence: i === 0,
-        color: i === 0 ? LETTER_COLORS.next : LETTER_COLORS.correct,
+        color: LETTER_COLORS.correct, // Keep all correct letters the same color
         wordIndex: i,
       })
     }
@@ -92,7 +92,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
         position: { x, y },
         isCorrect: false,
         isNextInSequence: false,
-        color: LETTER_COLORS.distractor,
+        color: LETTER_COLORS.correct, // Same color as correct letters
         wordIndex: undefined,
       })
     }
@@ -193,47 +193,58 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
       // Add simple border
       ctx.strokeStyle = "rgba(0, 0, 0, 0.3)"
       ctx.lineWidth = 1
-      ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-
-      // Draw eyes on head
+      ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE)      // Draw eyes on head
       if (index === 0) {
-        ctx.fillStyle = GAME_COLORS.snakeEyes
-        const eyeSize = CELL_SIZE / 5
-        const eyeOffset = CELL_SIZE / 3
+        const eyeRadius = CELL_SIZE / 8 // Made eyes circular
+        const eyeOffset = CELL_SIZE / 4
 
-        let leftEyeX, leftEyeY, rightEyeX, rightEyeY
+        let leftEyeCenterX, leftEyeCenterY, rightEyeCenterX, rightEyeCenterY
 
         switch (currentState.direction) {
           case Direction.UP:
-            leftEyeX = segment.x * CELL_SIZE + eyeOffset
-            leftEyeY = segment.y * CELL_SIZE + eyeOffset
-            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
-            rightEyeY = segment.y * CELL_SIZE + eyeOffset
+            leftEyeCenterX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeCenterY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeCenterY = segment.y * CELL_SIZE + eyeOffset
             break
           case Direction.DOWN:
-            leftEyeX = segment.x * CELL_SIZE + eyeOffset
-            leftEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
-            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
-            rightEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
+            leftEyeCenterX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
             break
           case Direction.LEFT:
-            leftEyeX = segment.x * CELL_SIZE + eyeOffset
-            leftEyeY = segment.y * CELL_SIZE + eyeOffset
-            rightEyeX = segment.x * CELL_SIZE + eyeOffset
-            rightEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
+            leftEyeCenterX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeCenterY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeCenterX = segment.x * CELL_SIZE + eyeOffset
+            rightEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
             break
           case Direction.RIGHT:
-            leftEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
-            leftEyeY = segment.y * CELL_SIZE + eyeOffset
-            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
-            rightEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset - eyeSize
+            leftEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            leftEyeCenterY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
             break
         }
 
-        // Draw simple eyes
+        // Draw circular eyes with black border
         ctx.fillStyle = GAME_COLORS.snakeEyes
-        ctx.fillRect(leftEyeX, leftEyeY, eyeSize, eyeSize)
-        ctx.fillRect(rightEyeX, rightEyeY, eyeSize, eyeSize)
+        
+        // Left eye
+        ctx.beginPath()
+        ctx.arc(leftEyeCenterX, leftEyeCenterY, eyeRadius, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = "#000000"
+        ctx.lineWidth = 1
+        ctx.stroke()
+        
+        // Right eye
+        ctx.beginPath()
+        ctx.arc(rightEyeCenterX, rightEyeCenterY, eyeRadius, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = "#000000"
+        ctx.lineWidth = 1
+        ctx.stroke()
       }
     })
 
@@ -317,9 +328,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
         case Direction.RIGHT:
           head.x += 1
           break
-      }
-
-      // Check wall collision - turn away from walls instead of wrapping
+      }      // Check wall collision - wrap around to opposite side
       const canvas = canvasRef.current
       if (!canvas) {
         gameLoopRef.current = requestAnimationFrame(gameLoop)
@@ -329,47 +338,17 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
       const maxX = Math.floor(canvas.width / CELL_SIZE) - 1
       const maxY = Math.floor(canvas.height / CELL_SIZE) - 1
 
-      // If snake is about to hit a wall, automatically turn away
-      if (head.x < 0 || head.x > maxX || head.y < 0 || head.y > maxY) {
-        const safeDirection = getSafeDirection(currentState.snake[0], direction, maxX, maxY)
-        
-        // Update direction to safe direction
-        const newState = { 
-          ...currentState, 
-          nextDirection: safeDirection as Direction,
-          direction: safeDirection as Direction 
-        }
-        setGameState(newState)
-        gameStateRef.current = newState
-        
-        // Recalculate head position with new direction
-        const newHead = { ...currentState.snake[0] }
-        switch (safeDirection) {
-          case 'UP':
-            newHead.y -= 1
-            break
-          case 'DOWN':
-            newHead.y += 1
-            break
-          case 'LEFT':
-            newHead.x -= 1
-            break
-          case 'RIGHT':
-            newHead.x += 1
-            break
-        }
-        
-        // Make sure new position is within bounds
-        if (newHead.x < 0 || newHead.x > maxX || newHead.y < 0 || newHead.y > maxY) {
-          // If still hitting wall, just move away from nearest wall
-          if (newHead.x < 0) newHead.x = 0
-          if (newHead.x > maxX) newHead.x = maxX
-          if (newHead.y < 0) newHead.y = 0
-          if (newHead.y > maxY) newHead.y = maxY
-        }
-        
-        head.x = newHead.x
-        head.y = newHead.y
+      // Wrap around walls
+      if (head.x < 0) {
+        head.x = maxX
+      } else if (head.x > maxX) {
+        head.x = 0
+      }
+      
+      if (head.y < 0) {
+        head.y = maxY
+      } else if (head.y > maxY) {
+        head.y = 0
       }
 
       // Check self collision
@@ -399,7 +378,8 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
 
       if (letterIndex !== -1) {
         const letter = newLetters[letterIndex]
-        shouldGrow = true
+        // Only grow snake when hitting correct letter in sequence
+        shouldGrow = letter.isNextInSequence
 
         if (letter.isNextInSequence) {
           // Correct letter in sequence
@@ -410,8 +390,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
           newLetters = newLetters.filter((_, i) => i !== letterIndex)
 
           // Update the next letter in sequence - use wordIndex to find the correct next letter
-          if (newCollectedLetters.length < currentState.targetWord.length) {
-            const nextLetterIndex = newLetters.findIndex(
+          if (newCollectedLetters.length < currentState.targetWord.length) {            const nextLetterIndex = newLetters.findIndex(
               (l) => l.isCorrect && l.wordIndex === newCollectedLetters.length
             )
 
@@ -419,7 +398,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
               newLetters[nextLetterIndex] = {
                 ...newLetters[nextLetterIndex],
                 isNextInSequence: true,
-                color: LETTER_COLORS.next,
+                color: LETTER_COLORS.correct, // Keep same color instead of changing to green
               }
             }
           }
@@ -448,11 +427,15 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
                 return
               }
             }
-          }
-        } else if (letter.isCorrect) {
+          }        } else if (letter.isCorrect) {
           // Correct letter but not in sequence (early pickup)
           newLives -= 1
           newScore = Math.max(0, newScore - 3) // Smaller penalty for early pickup
+
+          // Call life loss callback
+          if (onLifeLoss) {
+            onLifeLoss()
+          }
 
           // Respawn the letter in a new position
           let newX, newY, posKey
@@ -486,11 +469,15 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete }: SnakeGa
             setGameState(gameOverState)
             gameStateRef.current = gameOverState
             return
-          }
-        } else {
+          }        } else {
           // Wrong letter (distractor)
           newLives -= 1
           newScore = Math.max(0, newScore - 5) // Penalty for wrong letter
+
+          // Call life loss callback
+          if (onLifeLoss) {
+            onLifeLoss()
+          }
 
           // Remove the wrong letter permanently
           newLetters = newLetters.filter((_, i) => i !== letterIndex)
