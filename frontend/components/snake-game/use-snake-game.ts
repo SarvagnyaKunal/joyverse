@@ -49,47 +49,67 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
     const letters: LetterItem[] = []
     const usedPositions: Set<string> = new Set()
     const maxX = Math.floor(canvas.width / CELL_SIZE) - 1
-    const maxY = Math.floor(canvas.height / CELL_SIZE) - 1
-
-    // Add correct letters
-    const wordLetters = word.split("")
-    for (let i = 0; i < wordLetters.length; i++) {
-      let x, y
-      let posKey
-
+    const maxY = Math.floor(canvas.height / CELL_SIZE) - 1    // Helper function to get a truly random position with better distribution
+    const getRandomPosition = (minDistance = 2): { x: number, y: number } => {
+      let attempts = 0
+      let x, y, posKey, tooClose
+      
       do {
-        x = Math.floor(Math.random() * maxX)
-        y = Math.floor(Math.random() * maxY)
+        // Use better random distribution to avoid clustering
+        x = Math.floor(Math.random() * (maxX - 2)) + 1 // Avoid edges
+        y = Math.floor(Math.random() * (maxY - 2)) + 1 // Avoid edges
         posKey = `${x},${y}`
-      } while (usedPositions.has(posKey))
-
+        
+        // Check minimum distance from existing letters
+        tooClose = false
+        if (minDistance > 0) {
+          for (const pos of usedPositions) {
+            const [existingX, existingY] = pos.split(',').map(Number)
+            const distance = Math.abs(x - existingX) + Math.abs(y - existingY) // Manhattan distance
+            if (distance < minDistance) {
+              tooClose = true
+              break
+            }
+          }
+        }
+        
+        attempts++
+        if (attempts > 100) { // Prevent infinite loop
+          minDistance = Math.max(0, minDistance - 1)
+          attempts = 0
+        }
+      } while ((usedPositions.has(posKey) || tooClose) && attempts < 100)
+      
+      return { x, y }
+    }    // Add correct letters with better spacing
+    const wordLetters = word.split("")
+    const firstLetter = wordLetters[0]
+    
+    for (let i = 0; i < wordLetters.length; i++) {
+      const position = getRandomPosition(3) // Minimum distance of 3 cells between letters
+      const posKey = `${position.x},${position.y}`
+      
       usedPositions.add(posKey)
       letters.push({
         letter: wordLetters[i],
-        position: { x, y },
+        position,
         isCorrect: true,
-        isNextInSequence: i === 0,
+        isNextInSequence: wordLetters[i] === firstLetter, // Mark any letter that matches the first letter
         color: LETTER_COLORS.correct, // Keep all correct letters the same color
         wordIndex: i,
       })
     }
 
-    // Add distractor letters
+    // Add distractor letters with even more spacing
     const distractors = getDistractorLetters(word)
     for (let i = 0; i < distractors.length; i++) {
-      let x, y
-      let posKey
-
-      do {
-        x = Math.floor(Math.random() * maxX)
-        y = Math.floor(Math.random() * maxY)
-        posKey = `${x},${y}`
-      } while (usedPositions.has(posKey))
+      const position = getRandomPosition(2) // Minimum distance of 2 cells for distractors
+      const posKey = `${position.x},${position.y}`
 
       usedPositions.add(posKey)
       letters.push({
         letter: distractors[i],
-        position: { x, y },
+        position,
         isCorrect: false,
         isNextInSequence: false,
         color: LETTER_COLORS.correct, // Same color as correct letters
@@ -378,27 +398,38 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
 
       if (letterIndex !== -1) {
         const letter = newLetters[letterIndex]
-        // Only grow snake when hitting correct letter in sequence
-        shouldGrow = letter.isNextInSequence
-
-        if (letter.isNextInSequence) {
-          // Correct letter in sequence
+        
+        // Check if this letter matches what we need next in the sequence
+        const nextNeededLetter = currentState.targetWord[newCollectedLetters.length]
+        const isCorrectNextLetter = letter.letter === nextNeededLetter && letter.isCorrect
+        
+        if (isCorrectNextLetter) {
+          // This is the correct letter we need next (handles repeated letters)
           newCollectedLetters += letter.letter
           newScore += 10
+          shouldGrow = true // Snake grows when eating correct letter
 
           // Remove the collected letter
           newLetters = newLetters.filter((_, i) => i !== letterIndex)
 
-          // Update the next letter in sequence - use wordIndex to find the correct next letter
-          if (newCollectedLetters.length < currentState.targetWord.length) {            const nextLetterIndex = newLetters.findIndex(
-              (l) => l.isCorrect && l.wordIndex === newCollectedLetters.length
+          // Update the next letter in sequence - find any correct letter that matches the next needed letter
+          if (newCollectedLetters.length < currentState.targetWord.length) {
+            const nextNeededLetterAfterThis = currentState.targetWord[newCollectedLetters.length]
+            
+            // Find any correct letter that matches the next needed letter and update it to be next in sequence
+            const nextLetterIndex = newLetters.findIndex(
+              (l) => l.isCorrect && l.letter === nextNeededLetterAfterThis
             )
 
             if (nextLetterIndex !== -1) {
+              // Update all letters to not be next in sequence first
+              newLetters = newLetters.map(l => ({ ...l, isNextInSequence: false }))
+              
+              // Then mark the found letter as next in sequence
               newLetters[nextLetterIndex] = {
                 ...newLetters[nextLetterIndex],
                 isNextInSequence: true,
-                color: LETTER_COLORS.correct, // Keep same color instead of changing to green
+                color: LETTER_COLORS.correct,
               }
             }
           }
@@ -427,49 +458,12 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
                 return
               }
             }
-          }        } else if (letter.isCorrect) {
-          // Correct letter but not in sequence (early pickup)
-          newLives -= 1
-          newScore = Math.max(0, newScore - 3) // Smaller penalty for early pickup
-
-          // Call life loss callback
-          if (onLifeLoss) {
-            onLifeLoss()
           }
-
-          // Respawn the letter in a new position
-          let newX, newY, posKey
-          const usedPositions = new Set(newLetters.map(l => `${l.position.x},${l.position.y}`))
-          usedPositions.add(`${head.x},${head.y}`) // Don't spawn on snake head
-          
-          do {
-            newX = Math.floor(Math.random() * (Math.floor(canvas.width / CELL_SIZE) - 1))
-            newY = Math.floor(Math.random() * (Math.floor(canvas.height / CELL_SIZE) - 1))
-            posKey = `${newX},${newY}`
-          } while (usedPositions.has(posKey))
-
-          // Replace the letter with same properties but new position
-          newLetters[letterIndex] = {
-            ...letter,
-            position: { x: newX, y: newY }
-          }
-
-          // Check if game over
-          if (newLives <= 0) {
-            const gameOverState = {
-              ...currentState,
-              snake: newSnake,
-              direction,
-              collectedLetters: newCollectedLetters,
-              letters: newLetters,
-              score: newScore,
-              lives: newLives,
-              gameStatus: GameStatus.GAME_OVER,
-            }
-            setGameState(gameOverState)
-            gameStateRef.current = gameOverState
-            return
-          }        } else {
+        } else if (letter.isCorrect) {
+          // Correct letter but not the one we need next - just ignore it, don't lose a life
+          // For repeated letters, we only want the one that matches the sequence
+          shouldGrow = false
+        } else {
           // Wrong letter (distractor)
           newLives -= 1
           newScore = Math.max(0, newScore - 5) // Penalty for wrong letter
