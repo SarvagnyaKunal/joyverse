@@ -44,7 +44,7 @@ def predict_emotion(image_bytes, processor, model):
         
     except Exception as e:
         raise Exception(f"Error processing image: {str(e)}")
-}
+
 
 # Emotion labels as per model's index mapping
 emotion_labels = model.config.id2label  # uses the model's internal label mapping

@@ -104,11 +104,6 @@ export function SnakeGame() {
         <Button onClick={restartGame} variant="outline">Restart</Button>
       </div>
 
-      <div className="mt-6 text-sm text-gray-600">
-        <p>Use arrow keys or WASD to move the snake.</p>
-        <p>Collect letters in the correct order to spell the target word.</p>
-        <p>Eating wrong letters costs you a life!</p>
-      </div>
     </div>
   )
 }
