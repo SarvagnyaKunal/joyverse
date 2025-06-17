@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-python-multipart
-Pillow
-torch
-transformers
-numpy
-jinja2
-python-jose[cryptography]
