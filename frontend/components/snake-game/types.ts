@@ -1,4 +1,5 @@
 import type { RefObject } from "react"
+import { Difficulty } from "./word-lists"
 
 export enum Direction {
   UP = "UP",
@@ -35,9 +36,11 @@ export interface SnakeGameState {
   targetWord: string
   collectedLetters: string
   letters: LetterItem[]
-  score: number
   lives: number
+  wordsCompleted: number
   gameStatus: GameStatus
+  difficulty: Difficulty
+  gameWon?: boolean
 }
 
 export interface SnakeGameProps {

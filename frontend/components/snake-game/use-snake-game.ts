@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { wordLists, Difficulty } from "./word-lists"
 import {
   Direction,
   GameStatus,
@@ -11,7 +12,6 @@ import {
 } from "@/components/snake-game/types"
 import {
   CELL_SIZE,
-  GAME_SPEED,
   INITIAL_SNAKE_LENGTH,
   LETTER_COLORS,
   GAME_COLORS,
@@ -20,27 +20,56 @@ import {
   getSafeDirection,
 } from "@/components/snake-game/constants"
 
-export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLoss }: SnakeGameProps) {
+// Constants for game speed and input handling
+const GAME_SPEED = 4 // Balanced speed for smooth movement
+const INPUT_QUEUE_SIZE = 2 // Keep last 2 moves for responsive turning
+
+export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGameProps) {
   const [gameState, setGameState] = useState<SnakeGameState>({
     snake: [],
     direction: Direction.RIGHT,
     nextDirection: Direction.RIGHT,
-    targetWord: initialWord || "apple",
+    targetWord: '',
     collectedLetters: "",
     letters: [],
-    score: 0,
+    wordsCompleted: 0,
     lives: 3,
     gameStatus: GameStatus.READY,
+    difficulty: 'easy' as Difficulty
   })
 
+  const TOTAL_WORDS = 10;
   const gameLoopRef = useRef<number | null>(null)
   const lastRenderTimeRef = useRef<number>(0)
   const gameStateRef = useRef<SnakeGameState>(gameState)
+  const inputQueueRef = useRef<Direction[]>([]) // Add input queue to handle quick keypresses
 
   // Keep gameStateRef in sync with gameState
   useEffect(() => {
     gameStateRef.current = gameState
   }, [gameState])
+
+  // Get a random word based on difficulty
+  const getRandomWord = useCallback((forceDifficulty?: Difficulty) => {
+    // If difficulty is forced (like starting with 'easy'), use that
+    const difficulty = forceDifficulty || (() => {
+      // After first word, randomly choose any difficulty
+      const difficulties: Difficulty[] = ['easy', 'medium', 'hard'];
+      const randomIndex = Math.floor(Math.random() * difficulties.length);
+      return difficulties[randomIndex];
+    })();
+
+    const words = wordLists[difficulty];
+    const randomIndex = Math.floor(Math.random() * words.length);
+    
+    // Update the current difficulty
+    setGameState(prev => ({
+      ...prev,
+      difficulty
+    }));
+    
+    return words[randomIndex];
+  }, []);
 
   // Generate letters for the game
   const generateLetters = useCallback((word: string, canvas: HTMLCanvasElement | null): LetterItem[] => {
@@ -49,70 +78,47 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
     const letters: LetterItem[] = []
     const usedPositions: Set<string> = new Set()
     const maxX = Math.floor(canvas.width / CELL_SIZE) - 1
-    const maxY = Math.floor(canvas.height / CELL_SIZE) - 1    // Helper function to get a truly random position with better distribution
-    const getRandomPosition = (minDistance = 2): { x: number, y: number } => {
-      let attempts = 0
-      let x, y, posKey, tooClose
-      
-      do {
-        // Use better random distribution to avoid clustering
-        x = Math.floor(Math.random() * (maxX - 2)) + 1 // Avoid edges
-        y = Math.floor(Math.random() * (maxY - 2)) + 1 // Avoid edges
-        posKey = `${x},${y}`
-        
-        // Check minimum distance from existing letters
-        tooClose = false
-        if (minDistance > 0) {
-          for (const pos of usedPositions) {
-            const [existingX, existingY] = pos.split(',').map(Number)
-            const distance = Math.abs(x - existingX) + Math.abs(y - existingY) // Manhattan distance
-            if (distance < minDistance) {
-              tooClose = true
-              break
-            }
-          }
-        }
-        
-        attempts++
-        if (attempts > 100) { // Prevent infinite loop
-          minDistance = Math.max(0, minDistance - 1)
-          attempts = 0
-        }
-      } while ((usedPositions.has(posKey) || tooClose) && attempts < 100)
-      
-      return { x, y }
-    }    // Add correct letters with better spacing
-    const wordLetters = word.split("")
-    const firstLetter = wordLetters[0]
+    const maxY = Math.floor(canvas.height / CELL_SIZE) - 1
     
-    for (let i = 0; i < wordLetters.length; i++) {
-      const position = getRandomPosition(3) // Minimum distance of 3 cells between letters
-      const posKey = `${position.x},${position.y}`
+    // Helper function to get a random position
+    const getRandomPosition = (): { x: number, y: number } => {
+      let x, y, posKey
+      do {
+        x = Math.floor(Math.random() * (maxX - 2)) + 1
+        y = Math.floor(Math.random() * (maxY - 2)) + 1
+        posKey = `${x},${y}`
+      } while (usedPositions.has(posKey))
       
       usedPositions.add(posKey)
+      return { x, y }
+    }
+
+    // Add correct letters
+    const wordLetters = word.split("")
+    for (let i = 0; i < wordLetters.length; i++) {
+      const position = getRandomPosition()
+      
       letters.push({
         letter: wordLetters[i],
         position,
         isCorrect: true,
-        isNextInSequence: wordLetters[i] === firstLetter, // Mark any letter that matches the first letter
-        color: LETTER_COLORS.correct, // Keep all correct letters the same color
+        isNextInSequence: i === 0, // Only first letter is next in sequence initially
+        color: LETTER_COLORS.correct,
         wordIndex: i,
       })
     }
 
-    // Add distractor letters with even more spacing
-    const distractors = getDistractorLetters(word)
-    for (let i = 0; i < distractors.length; i++) {
-      const position = getRandomPosition(2) // Minimum distance of 2 cells for distractors
-      const posKey = `${position.x},${position.y}`
-
-      usedPositions.add(posKey)
+    // Add 5 distractor letters
+    const distractors = getDistractorLetters(word).slice(0, 5)
+    for (const letter of distractors) {
+      const position = getRandomPosition()
+      
       letters.push({
-        letter: distractors[i],
+        letter,
         position,
         isCorrect: false,
         isNextInSequence: false,
-        color: LETTER_COLORS.correct, // Same color as correct letters
+        color: LETTER_COLORS.correct,
         wordIndex: undefined,
       })
     }
@@ -120,41 +126,40 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
     return letters
   }, [])
 
-  // Initialize the game
-  const initGame = useCallback(
-    (word: string) => {
-      const canvas = canvasRef.current
-      if (!canvas) return
+  // Initialize or restart the game
+  const initGame = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-      // Create initial snake
-      const centerX = Math.floor(canvas.width / CELL_SIZE / 2)
-      const centerY = Math.floor(canvas.height / CELL_SIZE / 2)
+    // Always start with an easy word
+    const word = getRandomWord('easy')
+    
+    // Create initial snake
+    const centerX = Math.floor(canvas.width / CELL_SIZE / 2)
+    const centerY = Math.floor(canvas.height / CELL_SIZE / 2)
 
-      const snake: Point[] = []
-      for (let i = 0; i < INITIAL_SNAKE_LENGTH; i++) {
-        snake.push({ x: centerX - i, y: centerY })
-      }
+    const snake: Point[] = []
+    for (let i = 0; i < INITIAL_SNAKE_LENGTH; i++) {
+      snake.push({ x: centerX - i, y: centerY })
+    }
 
-      // Generate letters for the word
-      const letters = generateLetters(word, canvas)
+    // Generate letters for the word
+    const letters = generateLetters(word, canvas)
 
-      const newState = {
-        snake,
-        direction: Direction.RIGHT,
-        nextDirection: Direction.RIGHT,
-        targetWord: word,
-        collectedLetters: "",
-        letters,
-        score: gameStateRef.current.score, // Keep existing score
-        lives: 3,
-        gameStatus: GameStatus.PLAYING,
-      }
-
-      setGameState(newState)
-      gameStateRef.current = newState
-    },
-    [canvasRef, generateLetters],
-  )
+    setGameState(prev => ({
+      ...prev,
+      snake,
+      direction: Direction.RIGHT,
+      nextDirection: Direction.RIGHT,
+      targetWord: word,
+      collectedLetters: "",
+      letters,
+      lives: 3,
+      wordsCompleted: 0,
+      gameStatus: GameStatus.PLAYING,
+      difficulty: 'easy'
+    }))
+  }, [canvasRef, generateLetters, getRandomWord])
 
   // Draw game
   const drawGame = useCallback(() => {
@@ -175,32 +180,16 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
     
     for (let col = 0; col < gridCols; col++) {
       for (let row = 0; row < gridRows; row++) {
-        // Alternating pattern: use different colors for even/odd positions
         const isEvenTile = (col + row) % 2 === 0
         ctx.fillStyle = isEvenTile ? GAME_COLORS.gridTile1 : GAME_COLORS.gridTile2
-        
         ctx.fillRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
         
-        // Add subtle grid lines for texture
+        // Add subtle grid lines
         ctx.strokeStyle = "rgba(0, 0, 0, 0.1)"
         ctx.lineWidth = 0.5
         ctx.strokeRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
       }
     }
-
-    // Draw wall borders
-    ctx.strokeStyle = GAME_COLORS.wallBorder
-    ctx.fillStyle = GAME_COLORS.wallFill
-    ctx.lineWidth = 4
-    
-    // Draw border around the entire game area
-    ctx.fillRect(0, 0, canvas.width, 4) // Top wall
-    ctx.fillRect(0, canvas.height - 4, canvas.width, 4) // Bottom wall
-    ctx.fillRect(0, 0, 4, canvas.height) // Left wall
-    ctx.fillRect(canvas.width - 4, 0, 4, canvas.height) // Right wall
-    
-    // Draw border outline
-    ctx.strokeRect(0, 0, canvas.width, canvas.height)
 
     // Draw snake with gradient colors
     currentState.snake.forEach((segment, index) => {
@@ -210,49 +199,56 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
       ctx.fillStyle = segmentColor
       ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
 
-      // Add simple border
+      // Add border to segment
       ctx.strokeStyle = "rgba(0, 0, 0, 0.3)"
       ctx.lineWidth = 1
-      ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE)      // Draw eyes on head
+      ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+
+      // Draw eyes on head
       if (index === 0) {
-        const eyeRadius = CELL_SIZE / 8 // Made eyes circular
+        const eyeRadius = CELL_SIZE / 8
         const eyeOffset = CELL_SIZE / 4
 
-        let leftEyeCenterX, leftEyeCenterY, rightEyeCenterX, rightEyeCenterY
+        let leftEyeX, leftEyeY, rightEyeX, rightEyeY
 
         switch (currentState.direction) {
           case Direction.UP:
-            leftEyeCenterX = segment.x * CELL_SIZE + eyeOffset
-            leftEyeCenterY = segment.y * CELL_SIZE + eyeOffset
-            rightEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
-            rightEyeCenterY = segment.y * CELL_SIZE + eyeOffset
+            leftEyeX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeY = segment.y * CELL_SIZE + eyeOffset
             break
           case Direction.DOWN:
-            leftEyeCenterX = segment.x * CELL_SIZE + eyeOffset
-            leftEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
-            rightEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
-            rightEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
+            leftEyeX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
             break
           case Direction.LEFT:
-            leftEyeCenterX = segment.x * CELL_SIZE + eyeOffset
-            leftEyeCenterY = segment.y * CELL_SIZE + eyeOffset
-            rightEyeCenterX = segment.x * CELL_SIZE + eyeOffset
-            rightEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
+            leftEyeX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeX = segment.x * CELL_SIZE + eyeOffset
+            rightEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
             break
           case Direction.RIGHT:
-            leftEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
-            leftEyeCenterY = segment.y * CELL_SIZE + eyeOffset
-            rightEyeCenterX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
-            rightEyeCenterY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
+            leftEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            leftEyeY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeY = segment.y * CELL_SIZE + CELL_SIZE - eyeOffset
             break
+          default:
+            leftEyeX = segment.x * CELL_SIZE + eyeOffset
+            leftEyeY = segment.y * CELL_SIZE + eyeOffset
+            rightEyeX = segment.x * CELL_SIZE + CELL_SIZE - eyeOffset
+            rightEyeY = segment.y * CELL_SIZE + eyeOffset
         }
 
-        // Draw circular eyes with black border
+        // Draw eyes with black border
         ctx.fillStyle = GAME_COLORS.snakeEyes
         
         // Left eye
         ctx.beginPath()
-        ctx.arc(leftEyeCenterX, leftEyeCenterY, eyeRadius, 0, Math.PI * 2)
+        ctx.arc(leftEyeX, leftEyeY, eyeRadius, 0, Math.PI * 2)
         ctx.fill()
         ctx.strokeStyle = "#000000"
         ctx.lineWidth = 1
@@ -260,7 +256,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
         
         // Right eye
         ctx.beginPath()
-        ctx.arc(rightEyeCenterX, rightEyeCenterY, eyeRadius, 0, Math.PI * 2)
+        ctx.arc(rightEyeX, rightEyeY, eyeRadius, 0, Math.PI * 2)
         ctx.fill()
         ctx.strokeStyle = "#000000"
         ctx.lineWidth = 1
@@ -274,13 +270,13 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
       const centerY = letter.position.y * CELL_SIZE + CELL_SIZE / 2
       const radius = CELL_SIZE / 2 - 2
       
-      // Draw main circle
+      // Draw letter circle
       ctx.beginPath()
       ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
-      ctx.fillStyle = letter.color
+      ctx.fillStyle = letter.isNextInSequence ? LETTER_COLORS.next : letter.color
       ctx.fill()
 
-      // Add simple border
+      // Add circle border
       ctx.strokeStyle = "rgba(0, 0, 0, 0.4)"
       ctx.lineWidth = 2
       ctx.stroke()
@@ -291,7 +287,7 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
       ctx.textAlign = "center"
       ctx.textBaseline = "middle"
       
-      // Add simple text shadow for readability
+      // Add text shadow
       ctx.shadowColor = "rgba(0, 0, 0, 0.5)"
       ctx.shadowBlur = 2
       ctx.shadowOffsetX = 1
@@ -307,7 +303,34 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
     })
   }, [canvasRef])
 
-  // Game loop
+  // Process the input queue
+  const processInputQueue = useCallback(() => {
+    if (inputQueueRef.current.length > 0) {
+      const nextDirection = inputQueueRef.current[0]
+      const currentState = gameStateRef.current
+      
+      // Check if this is a valid move
+      const isValidMove = (
+        (nextDirection === Direction.UP && currentState.direction !== Direction.DOWN) ||
+        (nextDirection === Direction.DOWN && currentState.direction !== Direction.UP) ||
+        (nextDirection === Direction.LEFT && currentState.direction !== Direction.RIGHT) ||
+        (nextDirection === Direction.RIGHT && currentState.direction !== Direction.LEFT)
+      )
+
+      if (isValidMove) {
+        setGameState(prev => ({
+          ...prev,
+          direction: nextDirection,
+          nextDirection: nextDirection
+        }))
+      }
+      
+      // Remove the processed input
+      inputQueueRef.current = inputQueueRef.current.slice(1)
+    }
+  }, [])
+
+  // Game loop with optimized movement
   const gameLoop = useCallback(
     (currentTime: number) => {
       const currentState = gameStateRef.current
@@ -327,15 +350,15 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
 
       lastRenderTimeRef.current = currentTime
 
+      // Process any queued inputs before moving
+      processInputQueue()
+
       // Update game state
       const newSnake = [...currentState.snake]
       const head = { ...newSnake[0] }
 
-      // Update direction
-      const direction = currentState.nextDirection
-
-      // Move snake head
-      switch (direction) {
+      // Move snake head based on current direction
+      switch (currentState.direction) {
         case Direction.UP:
           head.y -= 1
           break
@@ -348,7 +371,9 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
         case Direction.RIGHT:
           head.x += 1
           break
-      }      // Check wall collision - wrap around to opposite side
+      }
+
+      // Handle boundary wrapping
       const canvas = canvasRef.current
       if (!canvas) {
         gameLoopRef.current = requestAnimationFrame(gameLoop)
@@ -358,242 +383,214 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
       const maxX = Math.floor(canvas.width / CELL_SIZE) - 1
       const maxY = Math.floor(canvas.height / CELL_SIZE) - 1
 
-      // Wrap around walls
-      if (head.x < 0) {
-        head.x = maxX
-      } else if (head.x > maxX) {
-        head.x = 0
-      }
-      
-      if (head.y < 0) {
-        head.y = maxY
-      } else if (head.y > maxY) {
-        head.y = 0
-      }
+      if (head.x < 0) head.x = maxX
+      else if (head.x > maxX) head.x = 0
 
-      // Check self collision
-      for (let i = 0; i < newSnake.length; i++) {
-        if (newSnake[i].x === head.x && newSnake[i].y === head.y) {
-          const newState = {
-            ...currentState,
-            gameStatus: GameStatus.GAME_OVER,
-          }
-          setGameState(newState)
-          gameStateRef.current = newState
-          return
-        }
-      }
+      if (head.y < 0) head.y = maxY
+      else if (head.y > maxY) head.y = 0
 
       // Add new head
       newSnake.unshift(head)
 
       // Check letter collision
-      let newLetters = [...currentState.letters]
-      let newCollectedLetters = currentState.collectedLetters
-      let newLives = currentState.lives
-      let newScore = currentState.score
-      let shouldGrow = false
-
-      const letterIndex = newLetters.findIndex((letter) => letter.position.x === head.x && letter.position.y === head.y)
+      const letterIndex = currentState.letters.findIndex(
+        letter => letter.position.x === head.x && letter.position.y === head.y
+      )
 
       if (letterIndex !== -1) {
-        const letter = newLetters[letterIndex]
+        const letter = currentState.letters[letterIndex]
+        const nextNeededLetter = currentState.targetWord[currentState.collectedLetters.length]
         
-        // Check if this letter matches what we need next in the sequence
-        const nextNeededLetter = currentState.targetWord[newCollectedLetters.length]
-        const isCorrectNextLetter = letter.letter === nextNeededLetter && letter.isCorrect
+        const isRepeatedLetter = letter.isCorrect && 
+          letter.letter === nextNeededLetter &&
+          currentState.targetWord.indexOf(letter.letter) !== 
+          currentState.targetWord.lastIndexOf(letter.letter)
         
+        const isValidRepeatedLetter = isRepeatedLetter && 
+          currentState.collectedLetters.length > 0 && 
+          currentState.targetWord.substring(0, currentState.collectedLetters.length) === 
+          currentState.collectedLetters && 
+          letter.letter === nextNeededLetter
+
+        const isCorrectNextLetter = letter.isCorrect && 
+          (letter.letter === nextNeededLetter || isValidRepeatedLetter)
+
         if (isCorrectNextLetter) {
-          // This is the correct letter we need next (handles repeated letters)
-          newCollectedLetters += letter.letter
-          newScore += 10
-          shouldGrow = true // Snake grows when eating correct letter
+          // Keep tail (grow) when collecting correct letter
+          const newLetters = currentState.letters.filter((_, i) => i !== letterIndex)
+          const newCollectedLetters = currentState.collectedLetters + letter.letter
 
-          // Remove the collected letter
-          newLetters = newLetters.filter((_, i) => i !== letterIndex)
-
-          // Update the next letter in sequence - find any correct letter that matches the next needed letter
-          if (newCollectedLetters.length < currentState.targetWord.length) {
-            const nextNeededLetterAfterThis = currentState.targetWord[newCollectedLetters.length]
+          if (newCollectedLetters.length === currentState.targetWord.length) {
+            const newWordsCompleted = currentState.wordsCompleted + 1
             
-            // Find any correct letter that matches the next needed letter and update it to be next in sequence
-            const nextLetterIndex = newLetters.findIndex(
-              (l) => l.isCorrect && l.letter === nextNeededLetterAfterThis
-            )
-
-            if (nextLetterIndex !== -1) {
-              // Update all letters to not be next in sequence first
-              newLetters = newLetters.map(l => ({ ...l, isNextInSequence: false }))
-              
-              // Then mark the found letter as next in sequence
-              newLetters[nextLetterIndex] = {
-                ...newLetters[nextLetterIndex],
-                isNextInSequence: true,
-                color: LETTER_COLORS.correct,
-              }
+            if (newWordsCompleted >= TOTAL_WORDS) {
+              setGameState(prev => ({
+                ...prev,
+                snake: newSnake,
+                letters: newLetters,
+                collectedLetters: newCollectedLetters,
+                wordsCompleted: newWordsCompleted,
+                gameStatus: GameStatus.GAME_OVER,
+                gameWon: true
+              }))
+              return
             }
-          }
 
-          // Check if word is complete
-          if (newCollectedLetters === currentState.targetWord) {
-            // Word completed, load next word
-            if (onWordComplete) {
-              const nextWord = onWordComplete()
-              if (nextWord) {
-                const nextWordLetters = generateLetters(nextWord, canvas)
-                const completedState = {
-                  ...currentState,
-                  snake: newSnake,
-                  direction,
-                  targetWord: nextWord,
-                  collectedLetters: "",
-                  letters: nextWordLetters,
-                  score: newScore + 50, // Bonus for completing word
-                  lives: 3, // Reset lives
-                }
-                setGameState(completedState)
-                gameStateRef.current = completedState
-                drawGame()
-                gameLoopRef.current = requestAnimationFrame(gameLoop)
-                return
-              }
-            }
+            // Start next word with random difficulty
+            const nextWord = getRandomWord()
+            const newLetters = generateLetters(nextWord, canvas)
+            
+            setGameState(prev => ({
+              ...prev,
+              snake: newSnake,
+              targetWord: nextWord,
+              collectedLetters: "",
+              letters: newLetters,
+              wordsCompleted: newWordsCompleted
+            }))
+          } else {
+            // Update next letter in sequence
+            const nextLetterAfterThis = currentState.targetWord[newCollectedLetters.length]
+            const updatedLetters = newLetters.map(l => ({
+              ...l,
+              isNextInSequence: l.isCorrect && l.letter === nextLetterAfterThis
+            }))
+
+            setGameState(prev => ({
+              ...prev,
+              snake: newSnake,
+              letters: updatedLetters,
+              collectedLetters: newCollectedLetters
+            }))
           }
-        } else if (letter.isCorrect) {
-          // Correct letter but not the one we need next - just ignore it, don't lose a life
-          // For repeated letters, we only want the one that matches the sequence
-          shouldGrow = false
         } else {
-          // Wrong letter (distractor)
-          newLives -= 1
-          newScore = Math.max(0, newScore - 5) // Penalty for wrong letter
+          // Wrong letter hit
+          newSnake.pop() // Remove tail when hitting wrong letter
+          const newLives = currentState.lives - 1
+          
+          if (newLives <= 0) {
+            setGameState(prev => ({
+              ...prev,
+              snake: newSnake,
+              lives: newLives,
+              gameStatus: GameStatus.GAME_OVER
+            }))
+            return
+          }
 
-          // Call life loss callback
+          // Get new position for the letter
+          const newPosition = {
+            x: Math.floor(Math.random() * (maxX - 2)) + 1,
+            y: Math.floor(Math.random() * (maxY - 2)) + 1
+          }
+
+          const updatedLetters = [...currentState.letters]
+          updatedLetters[letterIndex] = {
+            ...letter,
+            position: newPosition
+          }
+
+          setGameState(prev => ({
+            ...prev,
+            snake: newSnake,
+            letters: updatedLetters,
+            lives: newLives
+          }))
+
           if (onLifeLoss) {
             onLifeLoss()
           }
-
-          // Remove the wrong letter permanently
-          newLetters = newLetters.filter((_, i) => i !== letterIndex)
-
-          // Check if game over
-          if (newLives <= 0) {
-            const gameOverState = {
-              ...currentState,
-              snake: newSnake,
-              direction,
-              collectedLetters: newCollectedLetters,
-              letters: newLetters,
-              score: newScore,
-              lives: newLives,
-              gameStatus: GameStatus.GAME_OVER,
-            }
-            setGameState(gameOverState)
-            gameStateRef.current = gameOverState
-            return
-          }
         }
-      }
-
-      // Remove tail if not growing
-      if (!shouldGrow) {
+      } else {
+        // No collision, remove tail
         newSnake.pop()
+        setGameState(prev => ({
+          ...prev,
+          snake: newSnake
+        }))
       }
 
-      // Update state
-      const newState = {
-        ...currentState,
-        snake: newSnake,
-        direction,
-        collectedLetters: newCollectedLetters,
-        letters: newLetters,
-        score: newScore,
-        lives: newLives,
-      }
-
-      setGameState(newState)
-      gameStateRef.current = newState
-
-      // Draw game
       drawGame()
-
-      // Continue game loop
       gameLoopRef.current = requestAnimationFrame(gameLoop)
     },
-    [canvasRef, drawGame, generateLetters, onWordComplete],
+    [canvasRef, drawGame, generateLetters, getRandomWord, onLifeLoss, processInputQueue]
   )
 
-  // Handle keyboard input
+  // Process direction change immediately
+  const changeDirection = useCallback((newDirection: Direction) => {
+    const currentState = gameStateRef.current
+    
+    // Check if this is a valid move
+    const isValidMove = (
+      (newDirection === Direction.UP && currentState.direction !== Direction.DOWN) ||
+      (newDirection === Direction.DOWN && currentState.direction !== Direction.UP) ||
+      (newDirection === Direction.LEFT && currentState.direction !== Direction.RIGHT) ||
+      (newDirection === Direction.RIGHT && currentState.direction !== Direction.LEFT)
+    )
+
+    if (isValidMove) {
+      // Update direction immediately
+      gameStateRef.current = {
+        ...currentState,
+        direction: newDirection,
+        nextDirection: newDirection
+      }
+      setGameState(gameStateRef.current)
+    }
+  }, [])
+
+  // Handle keyboard input with immediate response
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const currentState = gameStateRef.current
       
-      // Always prevent default for arrow keys and space when game is mounted
-      const gameKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "]
+      // Prevent default for game keys
+      const gameKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "W", "s", "S", "a", "A", "d", "D", " "]
       if (gameKeys.includes(e.key)) {
         e.preventDefault()
         e.stopPropagation()
       }
 
-      // Only process game logic when playing
       if (currentState.gameStatus !== GameStatus.PLAYING) return
 
-      let newDirection = currentState.nextDirection
-
-      switch (e.key) {
-        case "ArrowUp":
+      // Handle direction changes
+      switch (e.key.toLowerCase()) {
+        case "arrowup":
         case "w":
-        case "W":
-          if (currentState.direction !== Direction.DOWN) {
-            newDirection = Direction.UP
-          }
+          changeDirection(Direction.UP)
           break
-        case "ArrowDown":
+        case "arrowdown":
         case "s":
-        case "S":
-          if (currentState.direction !== Direction.UP) {
-            newDirection = Direction.DOWN
-          }
+          changeDirection(Direction.DOWN)
           break
-        case "ArrowLeft":
+        case "arrowleft":
         case "a":
-        case "A":
-          if (currentState.direction !== Direction.RIGHT) {
-            newDirection = Direction.LEFT
-          }
+          changeDirection(Direction.LEFT)
           break
-        case "ArrowRight":
+        case "arrowright":
         case "d":
-        case "D":
-          if (currentState.direction !== Direction.LEFT) {
-            newDirection = Direction.RIGHT
-          }
+          changeDirection(Direction.RIGHT)
           break
         case " ":
-          // Toggle pause
-          const newStatus = currentState.gameStatus === GameStatus.PLAYING ? GameStatus.PAUSED : GameStatus.PLAYING
-          const pausedState = { ...currentState, gameStatus: newStatus }
-          setGameState(pausedState)
-          gameStateRef.current = pausedState
+          const newStatus = currentState.gameStatus === GameStatus.PLAYING ? 
+            GameStatus.PAUSED : GameStatus.PLAYING
+          
+          setGameState(prev => ({
+            ...prev,
+            gameStatus: newStatus
+          }))
+
           if (newStatus === GameStatus.PLAYING) {
             lastRenderTimeRef.current = performance.now()
             gameLoopRef.current = requestAnimationFrame(gameLoop)
           }
-          return
-      }
-
-      if (newDirection !== currentState.nextDirection) {
-        const newState = { ...currentState, nextDirection: newDirection }
-        setGameState(newState)
-        gameStateRef.current = newState
+          break
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [gameLoop])
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [changeDirection])
 
   // Start game
   const startGame = useCallback(() => {
@@ -601,10 +598,10 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
       cancelAnimationFrame(gameLoopRef.current)
     }
 
-    initGame(gameState.targetWord)
+    initGame()
     lastRenderTimeRef.current = performance.now()
     gameLoopRef.current = requestAnimationFrame(gameLoop)
-  }, [gameLoop, gameState.targetWord, initGame])
+  }, [gameLoop, initGame])
 
   // Restart game
   const restartGame = useCallback(() => {
@@ -612,10 +609,10 @@ export function useSnakeGame({ canvasRef, initialWord, onWordComplete, onLifeLos
       cancelAnimationFrame(gameLoopRef.current)
     }
 
-    initGame(gameState.targetWord)
+    initGame()
     lastRenderTimeRef.current = performance.now()
     gameLoopRef.current = requestAnimationFrame(gameLoop)
-  }, [gameLoop, gameState.targetWord, initGame])
+  }, [gameLoop, initGame])
 
   // Pause game
   const pauseGame = useCallback(() => {
