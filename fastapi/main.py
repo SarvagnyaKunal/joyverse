@@ -160,7 +160,5 @@ async def health_check():
     }
 
 if __name__ == "__main__":
-    print("Starting Emotion Detection Server...")
-    print("Access the app at: http://localhost:8000")
-    print("Make sure to use localhost (not 127.0.0.1) for webcam access!")
+    print("Starting server")
     uvicorn.run(app, host="localhost", port=8000, log_level="info")
