@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Webcam Emotion Detection</title>
+</head>
+<body>
+    <h1>Webcam Emotion Detection</h1>
+    
+    <video id="video" width="640" height="480" autoplay muted style="display: none;"></video>
+    <div id="webcam-placeholder">Click "Start Webcam" to begin</div>
+    <canvas id="canvas" style="display: none;"></canvas>
+    
+    <br><br>
+    
+    <button onclick="startWebcam()" id="start-webcam-btn">Start Webcam</button>
+    <button onclick="captureAndAnalyze()" id="capture-btn" style="display: none;">Capture & Analyze</button>
+    <button onclick="stopWebcam()" id="stop-webcam-btn" style="display: none;">Stop Webcam</button>
+    
+    <div id="loading" style="display: none;">Analyzing...</div>
+    <div id="error" style="display: none; color: red;"></div>
+    
+    <div id="results" style="display: none;">
+        <h3>Results:</h3>
+        <div id="emotion-list"></div>
+    </div>
+
+    <script>
+        let stream = null;
+
+        async function startWebcam() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                
+                const video = document.getElementById('video');
+                const placeholder = document.getElementById('webcam-placeholder');
+                
+                video.srcObject = stream;
+                video.style.display = 'block';
+                placeholder.style.display = 'none';
+                
+                document.getElementById('start-webcam-btn').style.display = 'none';
+                document.getElementById('capture-btn').style.display = 'inline-block';
+                document.getElementById('stop-webcam-btn').style.display = 'inline-block';
+                
+                hideResults();
+                hideError();
+            } catch (error) {
+                showError('Could not access webcam: ' + error.message);
+            }
+        }
+
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            const video = document.getElementById('video');
+            const placeholder = document.getElementById('webcam-placeholder');
+            
+            video.srcObject = null;
+            video.style.display = 'none';
+            placeholder.style.display = 'block';
+            
+            document.getElementById('start-webcam-btn').style.display = 'inline-block';
+            document.getElementById('capture-btn').style.display = 'none';
+            document.getElementById('stop-webcam-btn').style.display = 'none';
+            
+            hideResults();
+        }
+
+        async function captureAndAnalyze() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+            
+            showLoading();
+            hideError();
+
+            try {
+                const response = await fetch('/predict-webcam', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResults(result.predictions);
+                } else {
+                    showError(result.error || 'An error occurred while analyzing the image');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function showResults(predictions) {
+            const emotionList = document.getElementById('emotion-list');
+            emotionList.innerHTML = '';
+            
+            predictions.sort((a, b) => b.confidence - a.confidence);
+            
+            predictions.forEach(pred => {
+                const emotionItem = document.createElement('div');
+                emotionItem.innerHTML = `${pred.emotion}: ${pred.confidence}%`;
+                emotionList.appendChild(emotionItem);
+            });
+            
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        function hideResults() {
+            document.getElementById('results').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
