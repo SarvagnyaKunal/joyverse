@@ -24,7 +24,18 @@ import {
 const GAME_SPEED = 4 // Balanced speed for smooth movement
 const INPUT_QUEUE_SIZE = 2 // Keep last 2 moves for responsive turning
 
-export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGameProps) {
+// Add this near the top of the file with other utilities
+const isValidDirectionChange = (currentDirection: Direction, newDirection: Direction): boolean => {
+  // Prevent 180-degree turns
+  return !(
+    (currentDirection === Direction.UP && newDirection === Direction.DOWN) ||
+    (currentDirection === Direction.DOWN && newDirection === Direction.UP) ||
+    (currentDirection === Direction.LEFT && newDirection === Direction.RIGHT) ||
+    (currentDirection === Direction.RIGHT && newDirection === Direction.LEFT)
+  );
+};
+
+export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss, paused }: SnakeGameProps & { paused?: boolean }) {
   const [gameState, setGameState] = useState<SnakeGameState>({
     snake: [],
     direction: Direction.RIGHT,
@@ -34,7 +45,7 @@ export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGam
     letters: [],
     wordsCompleted: 0,
     lives: 3,
-    gameStatus: GameStatus.READY,
+    gameStatus: GameStatus.INTRO, // Start with intro screen
     difficulty: 'easy' as Difficulty
   })
 
@@ -436,17 +447,17 @@ export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGam
               return
             }
 
-            // Start next word with random difficulty
+            // Start next word with random difficulty and restore lives
             const nextWord = getRandomWord()
             const newLetters = generateLetters(nextWord, canvas)
-            
             setGameState(prev => ({
               ...prev,
               snake: newSnake,
               targetWord: nextWord,
               collectedLetters: "",
               letters: newLetters,
-              wordsCompleted: newWordsCompleted
+              wordsCompleted: newWordsCompleted,
+              lives: 3 // Regenerate hearts
             }))
           } else {
             // Update next letter in sequence
@@ -592,8 +603,107 @@ export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGam
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [changeDirection])
 
-  // Start game
+  // Start game function - simplified to just start the game
   const startGame = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const gridWidth = Math.floor(canvas.width / CELL_SIZE);
+    const gridHeight = Math.floor(canvas.height / CELL_SIZE);
+    
+    // Initialize snake in the middle of the canvas
+    const initialSnake: Point[] = [];
+    const startX = Math.floor(gridWidth / 4);
+    const startY = Math.floor(gridHeight / 2);
+    
+    for (let i = 0; i < INITIAL_SNAKE_LENGTH; i++) {
+      initialSnake.push({ x: startX - i, y: startY });
+    }
+
+    // Get initial word
+    const words = wordLists['easy'];
+    const initialWord = words[Math.floor(Math.random() * words.length)];
+
+    setGameState({
+      snake: initialSnake,
+      direction: Direction.RIGHT,
+      nextDirection: Direction.RIGHT,
+      targetWord: initialWord,
+      collectedLetters: "",
+      letters: initialWord.split('').map((letter, index) => ({
+        letter,
+        position: {
+          x: Math.floor(Math.random() * (gridWidth - 2)) + 1,
+          y: Math.floor(Math.random() * (gridHeight - 2)) + 1
+        },
+        isCorrect: true,
+        isNextInSequence: index === 0,
+        color: index === 0 ? LETTER_COLORS.next : LETTER_COLORS.correct,
+        wordIndex: index
+      })),
+      lives: 3,
+      wordsCompleted: 0,
+      gameStatus: GameStatus.PLAYING,
+      difficulty: 'easy' as Difficulty
+    });
+
+    startGameLoop();
+  }, []);
+
+  // Handle keyboard input
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      const { key } = event;
+      const currentStatus = gameStateRef.current.gameStatus;
+
+      // Handle Enter key for intro screen
+      if (currentStatus === GameStatus.INTRO && key === 'Enter') {
+        event.preventDefault();
+        startGame();
+        return;
+      }
+
+      // Only handle movement keys when playing
+      if (currentStatus !== GameStatus.PLAYING) return;
+
+      switch (key.toLowerCase()) {
+        case 'arrowup':
+        case 'w':
+          setGameState(prev => ({
+            ...prev,
+            nextDirection: Direction.UP
+          }));
+          break;
+        case 'arrowdown':
+        case 's':
+          setGameState(prev => ({
+            ...prev,
+            nextDirection: Direction.DOWN
+          }));
+          break;
+        case 'arrowleft':
+        case 'a':
+          setGameState(prev => ({
+            ...prev,
+            nextDirection: Direction.LEFT
+          }));
+          break;
+        case 'arrowright':
+        case 'd':
+          setGameState(prev => ({
+            ...prev,
+            nextDirection: Direction.RIGHT
+          }));
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [startGame]);
+
+  // Start game
+  const startGameLoop = useCallback(() => {
     if (gameLoopRef.current) {
       cancelAnimationFrame(gameLoopRef.current)
     }
@@ -633,6 +743,21 @@ export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGam
     }
   }, [gameLoop])
 
+  // Pause/resume game loop based on paused prop
+  useEffect(() => {
+    if (paused) {
+      if (gameLoopRef.current) {
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
+    } else if (gameStateRef.current.gameStatus === GameStatus.PLAYING) {
+      if (!gameLoopRef.current) {
+        lastRenderTimeRef.current = performance.now();
+        gameLoopRef.current = requestAnimationFrame(gameLoop);
+      }
+    }
+  }, [paused, gameStateRef.current.gameStatus]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -664,3 +789,58 @@ export function useSnakeGame({ canvasRef, onWordComplete, onLifeLoss }: SnakeGam
     adjustDifficulty,
   }
 }
+
+// Helper function to create distractor letters
+const createDistractorLetters = (word: string, gridWidth: number, gridHeight: number, snake: Point[]): LetterItem[] => {
+  const letters: LetterItem[] = [];
+  const wordLetters = word.split('');
+  
+  // Create letter items for each letter in the word
+  for (let i = 0; i < wordLetters.length; i++) {
+    // Generate random position that doesn't overlap with snake
+    let position: Point;
+    do {
+      position = {
+        x: Math.floor(Math.random() * (gridWidth - 2)) + 1,
+        y: Math.floor(Math.random() * (gridHeight - 2)) + 1
+      };
+    } while (snake.some(segment => segment.x === position.x && segment.y === position.y));
+
+    letters.push({
+      letter: wordLetters[i],
+      position,
+      isCorrect: true,
+      isNextInSequence: i === 0,
+      color: i === 0 ? LETTER_COLORS.next : LETTER_COLORS.correct,
+      wordIndex: i
+    });
+  }
+
+  // Add some distractor letters
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numDistractors = Math.min(5, gridWidth * gridHeight - wordLetters.length - snake.length);
+  
+  for (let i = 0; i < numDistractors; i++) {
+    let position: Point;
+    do {
+      position = {
+        x: Math.floor(Math.random() * (gridWidth - 2)) + 1,
+        y: Math.floor(Math.random() * (gridHeight - 2)) + 1
+      };
+    } while (
+      snake.some(segment => segment.x === position.x && segment.y === position.y) ||
+      letters.some(item => item.position.x === position.x && item.position.y === position.y)
+    );
+
+    const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
+    letters.push({
+      letter: randomLetter,
+      position,
+      isCorrect: false,
+      isNextInSequence: false,
+      color: LETTER_COLORS.distractor
+    });
+  }
+
+  return letters;
+};
