@@ -9,6 +9,8 @@ export enum Direction {
 }
 
 export enum GameStatus {
+  INTRO = "INTRO",
+  TUTORIAL = "TUTORIAL",
   READY = "READY",
   PLAYING = "PLAYING",
   PAUSED = "PAUSED",

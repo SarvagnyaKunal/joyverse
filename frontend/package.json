@@ -1,7 +1,8 @@
 {
   "name": "kids-learning-games",
   "version": "0.1.0",
-  "private": true,  "scripts": {
+  "private": true,
+  "scripts": {
     "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"npm run backend\" \"next dev\"",
     "dev:frontend-only": "next dev",
     "backend": "cd ../backend && npm run dev",
