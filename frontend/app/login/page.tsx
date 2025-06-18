@@ -55,7 +55,6 @@ export default function LoginPage() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -66,14 +65,19 @@ export default function LoginPage() {
       try {
       // Use the auth API
       const response = await authAPI.login(formData.email, formData.password);
-        if (response.success) {
+        if (response.success && response.user && response.token) {
         // Use the auth context login method
-        login(response.user!, response.token!, formData.remember);
+        login(response.user, response.token, formData.remember);
         
         setMessage('Login successful! Redirecting...');
         
         setTimeout(() => {
-          router.push('/'); // redirect to home page
+          // Redirect based on user role
+          if (response.user!.role === 'therapist') {
+            router.push('/dashboard'); // Therapist dashboard
+          } else {
+            router.push('/dashboard'); // User dashboard
+          }
         }, 1500);
       } else {
         setMessage(response.message || 'Login failed');

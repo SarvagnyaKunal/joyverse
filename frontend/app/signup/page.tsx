@@ -11,12 +11,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 import { authAPI } from '@/lib/auth';
 
-export default function SignupPage() {
-  const [formData, setFormData] = useState({
+export default function SignupPage() {  const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
+    age: '',
+    gender: '',
+    therapistUID: '',
     terms: false
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
@@ -24,9 +26,10 @@ export default function SignupPage() {
   const [message, setMessage] = useState('');
   
   const router = useRouter();
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    const checked = 'checked' in e.target ? e.target.checked : false;
+    
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -37,7 +40,6 @@ export default function SignupPage() {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
-
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
     
@@ -61,6 +63,21 @@ export default function SignupPage() {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     
+    if (!formData.age) {
+      newErrors.age = 'Age is required';
+    } else if (parseInt(formData.age) < 5 || parseInt(formData.age) > 18) {
+      newErrors.age = 'Age must be between 5 and 18 years';
+    }
+    
+    if (!formData.gender) {
+      newErrors.gender = 'Please select your gender';
+    }
+      if (!formData.therapistUID) {
+      newErrors.therapistUID = 'Therapist ID is required';
+    } else if (!/^[0-9a-fA-F]{24}$/.test(formData.therapistUID)) {
+      newErrors.therapistUID = 'Therapist ID must be a 24-character hexadecimal string';
+    }
+    
     if (!formData.terms) {
       newErrors.terms = 'You must agree to the terms and conditions';
     }
@@ -68,7 +85,6 @@ export default function SignupPage() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -79,13 +95,16 @@ export default function SignupPage() {
       try {
       // Use the auth API
       const response = await authAPI.signup({
-        fullName: formData.fullName,
+        name: formData.fullName,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        age: parseInt(formData.age),
+        gender: formData.gender,
+        therapistUID: formData.therapistUID
       });
       
       if (response.success) {
-        setMessage('Account created successfully! Please check your email to verify your account.');
+        setMessage('Account created successfully! Redirecting to login...');
         
         setTimeout(() => {
           router.push('/login');
@@ -166,8 +185,7 @@ export default function SignupPage() {
               </p>
               {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
             </div>
-            
-            <div className="space-y-2">
+              <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
                 type="password"
@@ -179,6 +197,58 @@ export default function SignupPage() {
                 className={errors.confirmPassword ? 'border-red-500' : ''}
               />
               {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="age">Age</Label>
+              <Input
+                type="number"
+                id="age"
+                name="age"
+                value={formData.age}
+                onChange={handleChange}
+                disabled={loading}
+                min="5"
+                max="18"
+                className={errors.age ? 'border-red-500' : ''}
+                placeholder="Enter your age (5-18)"
+              />
+              {errors.age && <p className="text-sm text-red-500">{errors.age}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="gender">Gender</Label>
+              <select
+                id="gender"
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                disabled={loading}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.gender ? 'border-red-500' : ''}`}
+              >
+                <option value="">Select your gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+              {errors.gender && <p className="text-sm text-red-500">{errors.gender}</p>}
+            </div>
+              <div className="space-y-2">
+              <Label htmlFor="therapistUID">Therapist ID</Label>
+              <Input
+                type="text"
+                id="therapistUID"
+                name="therapistUID"
+                value={formData.therapistUID}
+                onChange={handleChange}
+                disabled={loading}
+                className={errors.therapistUID ? 'border-red-500' : ''}
+                placeholder="e.g., 6852586bd1242044d0686343"
+              />
+              <p className="text-xs text-gray-500">
+                This should be a 24-character ID provided by your assigned therapist
+              </p>
+              {errors.therapistUID && <p className="text-sm text-red-500">{errors.therapistUID}</p>}
             </div>
             
             <div className="space-y-2">

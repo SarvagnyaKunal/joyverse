@@ -34,7 +34,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-20 text-center relative z-10">
+        <div className="container mx-auto px-4 py-15 text-center relative z-10">
          {/* Hero Content */}
           <div className="max-w-4xl mx-auto">
             <h1 className="text-5xl md:text-7xl font-bold text-gray-800 mb-6 animate-fade-in">
