@@ -1,5 +1,39 @@
 # Joyverse - Testing Instructions
 
+## Quick Start (Automatic - Both Servers)
+
+### Option 1: Using NPM (Recommended)
+```bash
+cd frontend
+npm run dev
+```
+This will automatically start both the backend and frontend servers simultaneously.
+
+### Option 2: Using Batch File (Windows)
+Double-click `start-joyverse.bat` in the root directory or run:
+```batch
+start-joyverse.bat
+```
+
+### Option 3: Manual Start (Individual Servers)
+If you want to start servers separately:
+
+**Backend Only:**
+```bash
+cd backend
+npm run dev
+```
+
+**Frontend Only:**
+```bash
+cd frontend
+npm run dev:frontend-only
+```
+
+## Access Points
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:5000
+
 ## Test Credentials
 
 ### Test Therapist
@@ -16,26 +50,6 @@ Use the following test data:
 - **Gender:** male
 - **Therapist ID:** 6852586bd1242044d0686343
 
-## Quick Start
-
-1. **Start Backend:**
-   ```bash
-   cd backend
-   npm run dev
-   ```
-   Backend will run on: http://localhost:5000
-
-2. **Start Frontend:**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   Frontend will run on: http://localhost:3000
-
-3. **Test the Application:**
-   - Go to http://localhost:3000/signup to create a new user account
-   - Go to http://localhost:3000/login to login as either user or therapist
-
 ## API Endpoints
 
 - **POST /api/signup** - User registration (for kids only)
@@ -44,3 +58,7 @@ Use the following test data:
 
 ## Database
 Make sure MongoDB is running and the connection string in the backend `.env` file is correct.
+
+## Testing the Application
+- Go to http://localhost:3000/signup to create a new user account
+- Go to http://localhost:3000/login to login as either user or therapist
