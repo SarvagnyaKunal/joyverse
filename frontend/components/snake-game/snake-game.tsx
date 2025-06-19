@@ -18,13 +18,40 @@ const GameDialog = ({ children, show }: { children: React.ReactNode; show: boole
   );
 };
 
-// Add a retro font dialog for popups
+// Add a retro font dialog for popups with snake mascot
 const RetroDialog = ({ children, show, vibrant = false }: { children: React.ReactNode; show: boolean; vibrant?: boolean }) => {
   if (!show) return null;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className={`rounded-2xl p-8 max-w-md mx-4 relative shadow-2xl font-retro border-4 ${vibrant ? 'bg-gradient-to-br from-yellow-200 via-pink-200 to-green-200 border-pink-500 animate-pulse' : 'bg-white border-green-600'}`}>
-        {children}
+      <div className={`rounded-2xl p-6 max-w-lg mx-4 relative shadow-2xl font-retro border-4 ${vibrant ? 'bg-gradient-to-br from-yellow-200 via-pink-200 to-green-200 border-pink-500 animate-pulse' : 'bg-white border-green-600'}`}>        {/* Mr. Snake Mascot - Even bigger and more prominent */}
+        <div className="absolute -top-32 -left-32 z-10">
+          <div className="w-48 h-48 flex items-center justify-center">
+            <img 
+              src="/snake-mascot.png.png" 
+              alt="Mr. Snake - Friendly Learning Mascot" 
+              className="w-44 h-44 object-contain drop-shadow-2xl"
+              onError={(e) => {
+                // Fallback to emoji if the image fails to load
+                console.log('Mr. Snake mascot image failed to load, using fallback');
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.innerHTML = `
+                    <div class="bg-gradient-to-br from-green-200 to-green-300 rounded-full w-40 h-40 flex items-center justify-center shadow-2xl border-4 border-green-400">
+                      <span class="text-7xl">🐍</span>
+                      <div class="absolute top-6 left-6 text-4xl">🤓</div>
+                    </div>
+                  `;
+                }
+              }}
+            />
+          </div>
+        </div>        {/* Speech bubble tail pointing to Mr. Snake */}
+        <div className={`absolute -top-8 left-20 w-12 h-12 transform rotate-45 ${vibrant ? 'bg-yellow-200 border-pink-500' : 'bg-white border-green-600'} border-l-4 border-t-4`}></div>
+        <div className="pt-4 pl-2">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -103,6 +130,24 @@ export function SnakeGame() {
     }
   }, [lifeLossResume]);
 
+  // Listen for spacebar to pause/resume game
+  useEffect(() => {
+    if (gameStatus === GameStatus.PLAYING || gameStatus === GameStatus.PAUSED) {
+      const handleSpacebar = (e: KeyboardEvent) => {
+        if (e.code === "Space" || e.key === " ") {
+          e.preventDefault();
+          if (gameStatus === GameStatus.PLAYING) {
+            pauseGame();
+          } else if (gameStatus === GameStatus.PAUSED) {
+            resumeGame();
+          }
+        }
+      };
+      window.addEventListener("keydown", handleSpacebar);
+      return () => window.removeEventListener("keydown", handleSpacebar);
+    }
+  }, [gameStatus, pauseGame, resumeGame]);
+
   return (    <div className="flex flex-col items-center">
       {/* Two-row layout for game info */}
       <div className="mb-6 w-full max-w-4xl">        {/* Top row - Target Word (left) and Lives (right) */}
@@ -112,12 +157,11 @@ export function SnakeGame() {
             <span className="text-lg font-bold text-gray-800">Target:</span>
             <span className="text-xl font-bold text-blue-600 bg-blue-100/30 backdrop-blur-sm px-2 py-1 rounded-md border border-blue-300/50">{targetWord}</span>
           </div>
-          
-          {/* Lives Section - Top Right */}
+            {/* Tries Section - Top Right */}
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-red-600">Lives:</span>
+            <span className="text-lg font-bold text-blue-600">Tries:</span>
             <div className="flex gap-1">
-              {Array(lives).fill("❤️").map((heart, index) => (
+              {Array(lives).fill("💙").map((heart, index) => (
                 <span key={index} className="text-2xl animate-pulse">{heart}</span>
               ))}
             </div>
@@ -149,54 +193,52 @@ export function SnakeGame() {
           className="border-2 border-gray-300 rounded-lg"
           width={800}
           height={550}
-        />
-
-        {/* Intro Popup with retro font */}
+        />        {/* Intro Popup with Mr. Snake mascot */}
         <RetroDialog show={gameStatus === GameStatus.INTRO && !showTutorial}>
           <div className="text-center">
-            <h2 className="text-3xl mb-4 text-green-600">Word Snake!</h2>
-            <p className="text-xl mb-6 text-gray-700">Hi! Let's learn some words together!</p>
-            <p className="text-lg text-green-600 animate-pulse mt-4">Press ENTER to continue</p>
+            <h2 className="text-3xl mb-4 text-green-600">🐍 Hello there, awesome friend!</h2>
+            <p className="text-xl mb-4 text-gray-700">I'm <strong>Mr. Snake</strong>, your learning buddy! 🤓</p>
+            <p className="text-lg mb-6 text-gray-600">I'm super excited to help you learn words together! You're going to do amazing!</p>
+            <p className="text-lg text-green-600 animate-pulse mt-4">Press ENTER to meet me!</p>
           </div>
-        </RetroDialog>
-
-        {/* Instructions Popup with retro font */}
+        </RetroDialog>        {/* Instructions Popup with Mr. Snake mascot */}
         <RetroDialog show={showTutorial}>
           <div className="text-center">
-            <h3 className="text-2xl mb-4 text-green-700">How to Play</h3>
-            <ul className="text-lg mb-6 text-gray-800 space-y-2">
-              <li>🎮 Use <b>WASD</b> or <b>Arrow Keys</b> to move</li>
-              <li>📝 Collect letters in order to spell the word</li>
-              <li>❤️ You have 3 lives</li>
-              <li>🎯 Complete words to win!</li>
+            <h3 className="text-2xl mb-4 text-green-700">🐍 Let's Play Together!</h3>
+            <p className="text-lg mb-4 text-gray-800">Hi! I'm <strong>Mr. Snake</strong> and here's how we'll have fun learning:</p>
+            <ul className="text-lg mb-6 text-gray-800 space-y-3 text-left">
+              <li>🎮 <b>Move me around</b> with WASD keys or Arrow Keys</li>
+              <li>🌟 <b>Help me collect letters</b> in the right order to spell words</li>
+              <li>💙 <b>You have 3 tries</b> - don't worry, I believe in you!</li>
+              <li>🎯 <b>We're a great team!</b> Let's spell words together!</li>
             </ul>
-            <p className="text-lg text-green-600 animate-pulse">Press ENTER to start!</p>
+            <p className="text-lg text-green-600 animate-pulse">Press ENTER and let's start our adventure!</p>
           </div>
-        </RetroDialog>
-
-        {/* Life Loss Popup with vibrant retro style */}
+        </RetroDialog>        {/* Life Loss Popup with encouraging Mr. Snake */}
         <RetroDialog show={showLifeLossPopup} vibrant>
           <div className="text-center">
-            <h3 className="text-3xl mb-4 text-pink-600 font-bold drop-shadow-lg">Ouchh!</h3>
-            <p className="text-lg mb-4 text-gray-900 font-semibold">Seems like you made a mistake.<br/>No problem kiddo, you still have your lives left.</p>
-            <p className="text-lg text-green-700 font-bold animate-pulse">Press ENTER to continue</p>
+            <h3 className="text-3xl mb-4 text-purple-600 font-bold drop-shadow-lg">🐍 Hey, no worries!</h3>
+            <p className="text-lg mb-4 text-gray-900 font-semibold">That's totally okay, my friend! 💙<br/>Mr. Snake says: Every try makes you stronger and smarter!</p>
+            <p className="text-lg mb-4 text-green-700 font-bold">You're doing such a great job learning with me!</p>
+            <p className="text-lg text-green-700 font-bold animate-pulse">Press ENTER and let's keep going together!</p>
           </div>
-        </RetroDialog>
-
-        {/* Game Over State */}
+        </RetroDialog>        {/* Game Over State with encouraging Mr. Snake */}
         {gameStatus === GameStatus.GAME_OVER && (
           <RetroDialog show={true}>
             <div className="text-center">
-              <h2 className="text-2xl font-bold mb-4 text-red-600">Game Over!</h2>
-              <p className="text-lg mb-6 text-gray-800">
-                ohh seems like you lost all your hearts!!!<br/>
-                don't worry you can always try once again
+              <h2 className="text-2xl font-bold mb-4 text-green-600">🐍 You're Amazing!</h2>
+              <p className="text-lg mb-4 text-gray-800">
+                Wow! Look how much you tried! 🌟<br/>
+                Mr. Snake is so proud of how hard you worked!
+              </p>
+              <p className="text-lg mb-6 text-purple-600 font-semibold">
+                Every attempt makes you a better reader! Want to try another adventure with Mr. Snake?
               </p>
               <Button
                 onClick={restartGame}
-                className="bg-green-500 hover:bg-green-600 text-white"
+                className="bg-green-500 hover:bg-green-600 text-white font-bold px-6 py-3 rounded-full"
               >
-                Play Again
+                🐍 Let's Play Again with Mr. Snake!
               </Button>
             </div>
           </RetroDialog>
