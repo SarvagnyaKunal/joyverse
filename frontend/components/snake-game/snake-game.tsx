@@ -103,25 +103,42 @@ export function SnakeGame() {
     }
   }, [lifeLossResume]);
 
-  return (
-    <div className="flex flex-col items-center">
-      <div className="mb-4 text-center">
-        <h2 className="text-xl font-semibold mb-2">
-          Target Word: <span className="text-green-600">{targetWord}</span>
-        </h2>
-        <div className="flex justify-center gap-1 mb-2">
-          {targetWord.split("").map((letter, index) => (
-            <div
-              key={index}
-              className={`w-8 h-8 flex items-center justify-center border-2 
-                ${index < collectedLetters.length ? "border-blue-500 bg-blue-100" : "border-gray-300"}`}
-            >
-              {letter}
+  return (    <div className="flex flex-col items-center">
+      {/* Two-row layout for game info */}
+      <div className="mb-6 w-full max-w-4xl">        {/* Top row - Target Word (left) and Lives (right) */}
+        <div className="flex items-center justify-between mb-4">
+          {/* Target Word Section - Top Left */}
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-bold text-gray-800">Target:</span>
+            <span className="text-xl font-bold text-blue-600 bg-blue-100/30 backdrop-blur-sm px-2 py-1 rounded-md border border-blue-300/50">{targetWord}</span>
+          </div>
+          
+          {/* Lives Section - Top Right */}
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-red-600">Lives:</span>
+            <div className="flex gap-1">
+              {Array(lives).fill("❤️").map((heart, index) => (
+                <span key={index} className="text-2xl animate-pulse">{heart}</span>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-        <div className="flex justify-between w-full max-w-md mb-2">
-          <div>Lives: {Array(lives).fill("❤️").join(" ")}</div>
+        
+        {/* Bottom row - Letter Progress centered */}
+        <div className="flex justify-center">
+          <div className="flex gap-1">
+            {targetWord.split("").map((letter, index) => (
+              <div
+                key={index}
+                className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-bold transition-all duration-300
+                  ${index < collectedLetters.length 
+                    ? "bg-green-400/40 backdrop-blur-sm text-green-800 shadow-md transform scale-110 border border-green-500/50" 
+                    : "bg-gray-200/30 backdrop-blur-sm text-gray-600 border border-dashed border-gray-400/50"}`}
+              >
+                {letter}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -131,7 +148,7 @@ export function SnakeGame() {
           ref={canvasRef}
           className="border-2 border-gray-300 rounded-lg"
           width={800}
-          height={600}
+          height={550}
         />
 
         {/* Intro Popup with retro font */}
@@ -184,19 +201,35 @@ export function SnakeGame() {
             </div>
           </RetroDialog>
         )}
-      </div>
-
-      {/* Game Controls */}
+      </div>      {/* Game Controls */}
       <div className="mt-4 space-x-4">
         {gameStatus === GameStatus.PLAYING && (
-          <Button onClick={pauseGame}>
-            Pause
-          </Button>
+          <>
+            <Button onClick={pauseGame}>
+              Pause
+            </Button>
+            <Button 
+              onClick={restartGame}
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50"
+            >
+              Restart
+            </Button>
+          </>
         )}
         {gameStatus === GameStatus.PAUSED && (
-          <Button onClick={resumeGame}>
-            Resume
-          </Button>
+          <>
+            <Button onClick={resumeGame}>
+              Resume
+            </Button>
+            <Button 
+              onClick={restartGame}
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50"
+            >
+              Restart
+            </Button>
+          </>
         )}
       </div>
     </div>
